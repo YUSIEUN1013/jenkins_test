@@ -1,1 +1,1 @@
-print("Hello, Jenkins + GitHub!")
+print("Hello, Jenkins + GitHub! hook test")
