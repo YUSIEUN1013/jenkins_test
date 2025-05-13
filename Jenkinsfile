@@ -1,61 +1,38 @@
-podTemplate(label: 'docker-build', 
-  containers: [
-    containerTemplate(
-      name: 'git',
-      image: 'alpine/git',
-      command: 'cat',
-      ttyEnabled: true
-    ),
-    containerTemplate(
-      name: 'docker',
-      image: 'docker',
-      command: 'cat',
-      ttyEnabled: true
-    ),
-  ],
-  volumes: [ 
-    hostPathVolume(mountPath: '/var/run/docker.sock', hostPath: '/var/run/docker.sock'), 
-  ]
-) {
-    node('docker-build') {
-        def dockerHubCred = dockerhub_id
-        def appImage
-        
-        stage('Checkout'){
-            container('git'){
-                checkout scm
-            }
-        }
-        
-        stage('Build'){
-            container('docker'){
+pipeline {
+    agent any
+
+    environment {
+        DOCKERHUB_CREDENTIALS_ID = 'dockerhub_id'   // Jenkins에 등록된 DockerHub 자격증명 ID
+        DOCKERHUB_USERNAME = 'selinux1'
+        IMAGE_NAME = "${DOCKERHUB_USERNAME}/jenkinstest"
+    }
+
+    stages {
+        stage('Build Docker Image') {
+            steps {
                 script {
-                    appImage = docker.build("selinux1/node-hello-world")
-                }
-            }
-        }
-        
-        stage('Test'){
-            container('docker'){
-                script {
-                    appImage.inside {
-                        sh 'npm install'
-                        sh 'npm test'
-                    }
+                    sh 'docker build -t $IMAGE_NAME .'
                 }
             }
         }
 
-        stage('Push'){
-            container('docker'){
+        stage('Push to DockerHub') {
+            steps {
                 script {
-                    docker.withRegistry('https://registry.hub.docker.com', dockerHubCred){
-                        appImage.push("${env.BUILD_NUMBER}")
-                        appImage.push("latest")
+                    docker.withRegistry('https://index.docker.io/v1/', "${DOCKERHUB_CREDENTIALS_ID}") {
+                        sh 'docker push $IMAGE_NAME'
                     }
                 }
             }
         }
     }
-    
+
+    post {
+        success {
+            echo "✅ Docker image pushed successfully!"
+        }
+        failure {
+            echo "❌ Build failed!"
+        }
+    }
 }
