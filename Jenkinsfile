@@ -1,43 +1,61 @@
-pipeline {
-    agent {
-        docker {
-            image 'docker:24.0.2-cli' // Docker CLI 포함 이미지
-            args '-v /var/run/docker.sock:/var/run/docker.sock'
+podTemplate(label: 'docker-build', 
+  containers: [
+    containerTemplate(
+      name: 'git',
+      image: 'alpine/git',
+      command: 'cat',
+      ttyEnabled: true
+    ),
+    containerTemplate(
+      name: 'docker',
+      image: 'docker',
+      command: 'cat',
+      ttyEnabled: true
+    ),
+  ],
+  volumes: [ 
+    hostPathVolume(mountPath: '/var/run/docker.sock', hostPath: '/var/run/docker.sock'), 
+  ]
+) {
+    node('docker-build') {
+        def dockerHubCred = dockerhub_id
+        def appImage
+        
+        stage('Checkout'){
+            container('git'){
+                checkout scm
+            }
         }
-    }
-
-    environment {
-        DOCKERHUB_CREDENTIALS_ID = 'dockerhub_id'   // Jenkins에 등록된 DockerHub 계정
-        DOCKERHUB_USERNAME = 'selinux1'
-        IMAGE_NAME = "${DOCKERHUB_USERNAME}/jenkinstest"
-    }
-
-    stages {
-        stage('Build Docker Image') {
-            steps {
+        
+        stage('Build'){
+            container('docker'){
                 script {
-                    sh 'docker build -t $IMAGE_NAME .'
+                    appImage = docker.build("selinux1/node-hello-world")
+                }
+            }
+        }
+        
+        stage('Test'){
+            container('docker'){
+                script {
+                    appImage.inside {
+                        sh 'npm install'
+                        sh 'npm test'
+                    }
                 }
             }
         }
 
-        stage('Push to DockerHub') {
-            steps {
+        stage('Push'){
+            container('docker'){
                 script {
-                    docker.withRegistry('https://index.docker.io/v1/', "${DOCKERHUB_CREDENTIALS_ID}") {
-                        sh 'docker push $IMAGE_NAME'
+                    docker.withRegistry('https://registry.hub.docker.com', dockerHubCred){
+                        appImage.push("${env.BUILD_NUMBER}")
+                        appImage.push("latest")
                     }
                 }
             }
         }
     }
-
-    post {
-        success {
-            echo "✅ Docker image pushed successfully!"
-        }
-        failure {
-            echo "❌ Build failed!"
-        }
-    }
+    
 }
