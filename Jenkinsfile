@@ -1,8 +1,12 @@
 pipeline {
-    agent any
+    agent {
+        kubernetes {
+            label 'docker'
+        }
+    }
 
     environment {
-        DOCKERHUB_CREDENTIALS_ID = 'dockerhub_id'   // Jenkins에 등록된 DockerHub 자격증명 ID
+        DOCKERHUB_CREDENTIALS_ID = 'dockerhub_id'   // Jenkins Credentials에 등록한 ID
         DOCKERHUB_USERNAME = 'selinux1'
         IMAGE_NAME = "${DOCKERHUB_USERNAME}/jenkinstest"
     }
@@ -10,9 +14,7 @@ pipeline {
     stages {
         stage('Build Docker Image') {
             steps {
-                script {
-                    sh 'docker build -t $IMAGE_NAME .'
-                }
+                sh 'docker build -t $IMAGE_NAME .'
             }
         }
 
